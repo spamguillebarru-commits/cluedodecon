@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoCluedo - Escuela de Consumo</title>
+    <!-- Cargando React y Babel para que el navegador entienda JSX -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Cargando Tailwind CSS para los estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Cargando Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // Iconos de Lucide adaptados para uso directo en React
+        const Icon = ({ name, className = "w-5 h-5" }) => {
+            const [iconHtml, setIconHtml] = useState('');
+            React.useEffect(() => {
+                const icon = lucide.icons[name];
+                if (icon) {
+                    setIconHtml(icon.toSvg({ class: className }));
+                }
+            }, [name, className]);
+            return <span dangerouslySetInnerHTML={{ __html: iconHtml }} />;
+        };
+
+        const SUSPECTS = [
+            { id: 's1', name: 'Don Derroche', desc: 'Adquiere productos sin evaluar su necesidad real.' },
+            { id: 's2', name: 'Madame Plástico', desc: 'Prioriza sistemáticamente los envases de un solo uso.' },
+            { id: 's3', name: 'Dr. Obsolescencia', desc: 'Desecha dispositivos electrónicos reparables.' },
+            { id: 's4', name: 'Capitán Fast-Fashion', desc: 'Consume moda rápida de forma compulsiva.' }
+        ];
+
+        const ACTIONS = [
+            { id: 'a1', name: 'Ausencia de reciclaje', desc: 'Desecho de envases en el contenedor de restos.' },
+            { id: 'a2', name: 'Desperdicio alimentario', desc: 'Omisión del consumo de alimentos antes de su caducidad.' },
+            { id: 'a3', name: 'Derroche energético', desc: 'Uso ineficiente de recursos hídricos y eléctricos.' },
+            { id: 'a4', name: 'Gestión tóxica', desc: 'Eliminación de baterías fuera del Punto Limpio.' }
+        ];
+
+        const LOCATIONS = [
+            { id: 'l1', name: 'El Supermercado', desc: 'Punto de abastecimiento de bienes de consumo.' },
+            { id: 'l2', name: 'El Centro Comercial', desc: 'Área de gran concentración de establecimientos.' },
+            { id: 'l3', name: 'La Cocina Residencial', desc: 'Núcleo del consumo y gestión de residuos domésticos.' },
+            { id: 'l4', name: 'La Superficie de Electrónica', desc: 'Distribuidor de aparatos tecnológicos.' }
+        ];
+
+        const QUESTIONS = [
+            { q: '¿Qué contenedor debe utilizarse para envases de plástico, latas y briks?', options: ['Amarillo', 'Azul', 'Verde'], correct: 0 },
+            { q: '¿Qué significan las 3R?', options: ['Rentabilizar, Recuperar, Repartir', 'Reducir, Reutilizar, Reciclar', 'Recoger, Romper, Reparar'], correct: 1 },
+            { q: '¿Dónde deben depositarse los RAEE (electrónicos)?', options: ['Contenedor gris', 'Papelera urbana', 'Punto Limpio'], correct: 2 },
+            { q: '¿Qué define el "Greenwashing"?', options: ['Marketing engañoso ecológico', 'Detergentes bio', 'Reciclaje de vidrio'], correct: 0 },
+            { q: 'Beneficio de productos de "Kilómetro 0":', options: ['Caducidad rápida', 'Menor huella de transporte', 'Más envases plásticos'], correct: 1 }
+        ];
+
+        function App() {
+            const [gameState, setGameState] = useState('start');
+            const [solution, setSolution] = useState({ suspect: null, action: null, location: null });
+            const [givenClues, setGivenClues] = useState([]);
+            const [crossedOutItems, setCrossedOutItems] = useState([]);
+            const [availableQuestions, setAvailableQuestions] = useState([]);
+            const [currentQuestion, setCurrentQuestion] = useState(null);
+            const [quizFeedback, setQuizFeedback] = useState(null);
+            const [lastClueGiven, setLastClueGiven] = useState('');
+            const [accusation, setAccusation] = useState({ suspect: '', action: '', location: '' });
+            const [accusationsLeft, setAccusationsLeft] = useState(3);
+            const [accusationFeedback, setAccusationFeedback] = useState('');
+
+            const startGame = () => {
+                setSolution({
+                    suspect: SUSPECTS[Math.floor(Math.random() * SUSPECTS.length)].id,
+                    action: ACTIONS[Math.floor(Math.random() * ACTIONS.length)].id,
+                    location: LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)].id
+                });
+                const shuffled = [...QUESTIONS].sort(() => 0.5 - Math.random());
+                setAvailableQuestions(shuffled);
+                setCurrentQuestion(shuffled[0]);
+                setGivenClues([]);
+                setCrossedOutItems([]);
+                setAccusationsLeft(3);
+                setGameState('playing');
+                setAccusation({ suspect: '', action: '', location: '' });
+                setAccusationFeedback('');
+                setQuizFeedback(null);
+            };
+
+            const handleAnswer = (idx) => {
+                if (idx === currentQuestion.correct) {
+                    setQuizFeedback('correct');
+                    revealClue();
+                } else {
+                    setQuizFeedback('incorrect');
+                    setLastClueGiven('Respuesta incorrecta. Sin pruebas nuevas.');
+                }
+            };
+
+            const revealClue = () => {
+                const allItems = [
+                    ...SUSPECTS.map(s => ({ ...s, type: 'sospechoso' })),
+                    ...ACTIONS.map(a => ({ ...a, type: 'acción' })),
+                    ...LOCATIONS.map(l => ({ ...l, type: 'lugar' }))
+                ];
+                const possible = allItems.filter(i => i.id !== solution.suspect && i.id !== solution.action && i.id !== solution.location && !givenClues.includes(i.id));
+                if (possible.length > 0) {
+                    const clue = possible[Math.floor(Math.random() * possible.length)];
+                    setGivenClues(prev => [...prev, clue.id]);
+                    setLastClueGiven(`Descartado: ${clue.name}. Táchalo en tu registro.`);
+                } else {
+                    setLastClueGiven("No hay más pistas disponibles.");
+                }
+            };
+
+            const nextQ = () => {
+                setQuizFeedback(null);
+                const next = availableQuestions.slice(1);
+                if (next.length > 0) {
+                    setAvailableQuestions(next);
+                    setCurrentQuestion(next[0]);
+                } else {
+                    const reshuffled = [...QUESTIONS].sort(() => 0.5 - Math.random());
+                    setAvailableQuestions(reshuffled);
+                    setCurrentQuestion(reshuffled[0]);
+                }
+            };
+
+            const makeAccusation = (e) => {
+                e.preventDefault();
+                if (accusation.suspect === solution.suspect && accusation.action === solution.action && accusation.location === solution.location) {
+                    setGameState('won');
+                } else {
+                    const left = accusationsLeft - 1;
+                    setAccusationsLeft(left);
+                    left <= 0 ? setGameState('lost') : setAccusationFeedback(`Error. Te quedan ${left} intentos.`);
+                }
+            };
+
+            const bgStyle = {
+                backgroundImage: "url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80')",
+                backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed'
+            };
+
+            if (gameState === 'start') return (
+                <div style={bgStyle} className="min-h-screen flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-blue-900/70 backdrop-blur-sm"></div>
+                    <div className="max-w-xl bg-white rounded-xl shadow-2xl p-8 relative z-10 text-center border-t-8 border-blue-600">
+                        <h1 className="text-3xl font-bold text-blue-900 mb-4">EcoCluedo</h1>
+                        <p className="text-gray-600 mb-8 text-lg">Resuelve el caso de consumo irresponsable en Salamanca.</p>
+                        <button onClick={startGame} className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-4 rounded-lg flex items-center justify-center gap-2">
+                            Iniciar Investigación <Icon name="ChevronRight" />
+                        </button>
+                    </div>
+                </div>
+            );
+
+            if (gameState === 'won' || gameState === 'lost') return (
+                <div style={bgStyle} className="min-h-screen flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-md"></div>
+                    <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-8 relative z-10 text-center">
+                        <h2 className="text-3xl font-bold mb-4">{gameState === 'won' ? '¡Caso Resuelto!' : 'Investigación Cerrada'}</h2>
+                        <p className="mb-8">{gameState === 'won' ? 'Has identificado al culpable con éxito.' : 'El infractor ha escapado.'}</p>
+                        <button onClick={startGame} className="bg-blue-700 text-white px-8 py-3 rounded-lg font-bold flex items-center gap-2 mx-auto">
+                            <Icon name="RotateCcw" /> Reiniciar
+                        </button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div style={bgStyle} className="min-h-screen p-4 md:p-8 relative">
+                    <div className="absolute inset-0 bg-slate-50/90 z-0"></div>
+                    <div className="max-w-6xl mx-auto relative z-10">
+                        <header className="bg-white p-6 rounded-xl shadow-md mb-8 flex justify-between items-center border-t-4 border-blue-800">
+                            <h1 className="text-2xl font-bold text-blue-900">Escuela de Consumo</h1>
+                            <div className="text-right">
+                                <span className="text-xs font-bold text-gray-400 block uppercase">Intentos</span>
+                                <span className="text-lg font-bold">{accusationsLeft} de 3</span>
+                            </div>
+                        </header>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="bg-white p-6 rounded-xl shadow-md">
+                                <h2 className="font-bold text-blue-900 border-b pb-2 mb-4 flex items-center gap-2">
+                                    <Icon name="BookOpen" /> Registro Manual
+                                </h2>
+                                <p className="text-xs text-gray-400 mb-4 italic">Haz clic para tachar elementos.</p>
+                                {[ {t:'Sospechosos', d:SUSPECTS}, {t:'Infracciones', d:ACTIONS}, {t:'Lugares', d:LOCATIONS} ].map(g => (
+                                    <div key={g.t} className="mb-4">
+                                        <h3 className="text-sm font-bold text-gray-500 uppercase mb-2">{g.t}</h3>
+                                        {g.d.map(item => (
+                                            <div key={item.id} onClick={() => setCrossedOutItems(prev => prev.includes(item.id) ? prev.filter(i => i !== item.id) : [...prev, item.id])}
+                                                 className={`cursor-pointer text-sm p-1 ${crossedOutItems.includes(item.id) ? 'line-through text-red-300' : 'text-gray-700 hover:bg-gray-50'}`}>
+                                                {crossedOutItems.includes(item.id) ? '✗ ' : '· '} {item.name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="lg:col-span-2 space-y-6">
+                                <div className="bg-white p-8 rounded-xl shadow-md">
+                                    <h2 className="text-xl font-bold mb-6 text-blue-900 flex items-center gap-2"><Icon name="Search"/> Investigación</h2>
+                                    {currentQuestion && !quizFeedback ? (
+                                        <div className="animate-fade-in">
+                                            <p className="text-lg font-bold mb-6 bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">{currentQuestion.q}</p>
+                                            <div className="space-y-3">
+                                                {currentQuestion.options.map((o, i) => (
+                                                    <button key={i} onClick={() => handleAnswer(i)} className="w-full text-left p-4 rounded-lg border hover:bg-blue-50 transition-all font-medium">{o}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center p-6">
+                                            <h3 className={`text-2xl font-bold mb-4 ${quizFeedback === 'correct' ? 'text-green-600' : 'text-red-600'}`}>
+                                                {quizFeedback === 'correct' ? '¡Prueba Obtenida!' : 'Error de Consulta'}
+                                            </h3>
+                                            <p className="text-lg text-gray-700 mb-6 italic">{lastClueGiven}</p>
+                                            <button onClick={nextQ} className="bg-blue-800 text-white px-8 py-3 rounded-lg font-bold">Continuar</button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="bg-slate-900 text-white p-8 rounded-xl shadow-xl">
+                                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-yellow-400"><Icon name="AlertTriangle"/> Acusación Formal</h2>
+                                    <form onSubmit={makeAccusation} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <select required className="bg-slate-800 p-3 rounded" value={accusation.suspect} onChange={e => setAccusation({...accusation, suspect: e.target.value})}>
+                                            <option value="">Sospechoso...</option>
+                                            {SUSPECTS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                        </select>
+                                        <select required className="bg-slate-800 p-3 rounded" value={accusation.action} onChange={e => setAccusation({...accusation, action: e.target.value})}>
+                                            <option value="">Acción...</option>
+                                            {ACTIONS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                        </select>
+                                        <select required className="bg-slate-800 p-3 rounded" value={accusation.location} onChange={e => setAccusation({...accusation, location: e.target.value})}>
+                                            <option value="">Lugar...</option>
+                                            {LOCATIONS.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                        </select>
+                                        <button className="md:col-span-3 bg-blue-600 hover:bg-blue-700 py-3 rounded font-bold text-lg mt-4">Firmar Sentencia</button>
+                                    </form>
+                                    {accusationFeedback && <p className="mt-4 text-red-400 text-center font-bold">{accusationFeedback}</p>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
